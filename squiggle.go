@@ -156,6 +156,10 @@ func (c *Col) Cascade() *Col {
 	return c
 }
 
+func (c *Col) Ok() *Table {
+	return c.table
+}
+
 func (c *Col) render() string {
 	var b strings.Builder
 

@@ -31,9 +31,9 @@ func TestTableRender(t *testing.T) {
 	scopes := NewTable("Scopes")
 	id := scopes.Int("id").Primary().Auto()
 
-	placeSettings := NewTable("CommandTTSPlaceSettings").IfNotExists()
-	placeSettings.Int("place").Primary().Foreign(id).Cascade()
-	placeSettings.Bool("subonly").NotNull().Default(false)
+	placeSettings := NewTable("CommandTTSPlaceSettings").IfNotExists().
+		Int("place").Primary().Foreign(id).Cascade().Ok().
+		Bool("subonly").NotNull().Default(false).Ok()
 
 	personSettings := NewTable("CommandTTSPersonSettings").IfNotExists()
 	person := personSettings.Int("person").NotNull()
