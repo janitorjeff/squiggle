@@ -45,3 +45,14 @@ func TestTableRender(t *testing.T) {
 	testTable(t, placeSettings, placeRender)
 	testTable(t, personSettings, personRender)
 }
+
+func BenchmarkTable(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		scopes := NewTable("Scopes")
+		id := scopes.Int("id").Primary().Auto()
+
+		NewTable("CommandTTSPlaceSettings").IfNotExists().
+			Int("place").Primary().Foreign(id).Cascade().Ok().
+			Bool("subonly").NotNull().Default(false).Ok().Render()
+	}
+}

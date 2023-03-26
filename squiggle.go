@@ -80,39 +80,67 @@ func (t *Table) VarChar(name string) *Col {
 	return t.col(name, VARCHAR255)
 }
 
+const (
+	renderCreateTable = "CREATE TABLE"
+	renderIfNotExists = " IF NOT EXISTS"
+	renderUniqueCols  = "\n\tUNIQUE("
+)
+
+func (t *Table) alloc() int {
+	// 1 for space, 2 for space paren, 3 for newline closing paren semicolon
+	// which are present at the end
+	allocLen := len(renderCreateTable) + 1 + 2 + len(t.name) + 3
+	if t.ifNotExists {
+		allocLen += len(renderIfNotExists)
+	}
+	for _, c := range t.cols {
+		// 1 for comma, which is almost always present
+		allocLen += c.alloc() + 1
+	}
+	for _, cols := range t.unique {
+		// 1 for closing paren
+		allocLen += len(renderUniqueCols) + 1
+		for _, col := range cols {
+			// 2 for comma space, which is likely present
+			allocLen += len(col.name) + 2
+		}
+	}
+	return allocLen
+}
+
 func (t *Table) Render() string {
 	var b strings.Builder
 
-	b.WriteString("CREATE TABLE")
+	b.Grow(t.alloc())
+
+	b.WriteString(renderCreateTable)
 
 	if t.ifNotExists {
-		b.WriteString(" IF NOT EXISTS")
+		b.WriteString(renderIfNotExists)
 	}
 
 	b.WriteByte(' ')
 	b.WriteString(t.name)
 	b.WriteString(" (")
 
-	var lines []string
-
-	for _, c := range t.cols {
-		lines = append(lines, c.render())
+	for i, c := range t.cols {
+		b.WriteString(c.render())
+		if i != len(t.cols)-1 || len(t.unique) != 0 {
+			b.WriteByte(',')
+		}
 	}
 
 	for _, cols := range t.unique {
-		var unique strings.Builder
-		unique.WriteString("\n\tUNIQUE(")
+		b.WriteString(renderUniqueCols)
 		for i, col := range cols {
-			unique.WriteString(col.name)
+			b.WriteString(col.name)
 			if len(cols)-1 > i {
-				unique.WriteString(", ")
+				b.WriteString(", ")
 			}
 		}
-		unique.WriteByte(')')
-		lines = append(lines, unique.String())
+		b.WriteByte(')')
 	}
 
-	b.WriteString(strings.Join(lines, ","))
 	b.WriteString("\n);")
 
 	return b.String()
@@ -160,8 +188,57 @@ func (c *Col) Ok() *Table {
 	return c.table
 }
 
+const (
+	renderPrimaryKey      = " PRIMARY KEY"
+	renderAutoIncrement   = " AUTOINCREMENT"
+	renderNotNull         = " NOT NULL"
+	renderUnique          = " UNIQUE"
+	renderDefault         = " DEFAULT "
+	renderForeignKey      = ",\n\tFOREIGN KEY ("
+	renderReferences      = ") REFERENCES "
+	renderOnDeleteCascade = " ON DELETE CASCADE"
+)
+
+func (c *Col) alloc() int {
+	// 6 is the type's length, arbitralily picked
+	allocLen := 2 + len(c.name) + 1 + 6
+	if c.primary {
+		allocLen += len(renderPrimaryKey)
+	}
+	if c.autoIncrement {
+		allocLen += len(renderAutoIncrement)
+	}
+	if c.notNull {
+		allocLen += len(renderNotNull)
+	}
+	if c.unique {
+		allocLen += len(renderUnique)
+	}
+	if c.defaultVal != nil {
+		// The 5 is an abitrarily selected number that seemed sane and
+		// represents the actual default value
+		allocLen += len(renderDefault) + 5
+	}
+	if c.foreignCol != nil {
+		allocLen += len(renderForeignKey) +
+			len(renderReferences) +
+			2 + // parens
+			len(c.name) +
+			len(c.foreignCol.table.name) +
+			len(c.foreignCol.name)
+
+		if c.foreignCascade {
+			allocLen += len(renderOnDeleteCascade)
+		}
+	}
+
+	return allocLen
+}
+
 func (c *Col) render() string {
 	var b strings.Builder
+
+	b.Grow(c.alloc())
 
 	b.WriteString("\n\t")
 	b.WriteString(c.name)
@@ -169,32 +246,32 @@ func (c *Col) render() string {
 	b.WriteString(c.t.Render())
 
 	if c.primary {
-		b.WriteString(" PRIMARY KEY")
+		b.WriteString(renderPrimaryKey)
 	}
 	if c.autoIncrement {
-		b.WriteString(" AUTOINCREMENT")
+		b.WriteString(renderAutoIncrement)
 	}
 	if c.notNull {
-		b.WriteString(" NOT NULL")
+		b.WriteString(renderNotNull)
 	}
 	if c.unique {
-		b.WriteString(" UNIQUE")
+		b.WriteString(renderUnique)
 	}
 	if c.defaultVal != nil {
-		b.WriteString(" DEFAULT ")
+		b.WriteString(renderDefault)
 		b.WriteString(c.t.Cast(c.defaultVal))
 	}
 
 	if fc := c.foreignCol; fc != nil {
-		b.WriteString(",\n\tFOREIGN KEY (")
+		b.WriteString(renderForeignKey)
 		b.WriteString(c.name)
-		b.WriteString(") REFERENCES ")
+		b.WriteString(renderReferences)
 		b.WriteString(fc.table.name)
 		b.WriteByte('(')
 		b.WriteString(fc.name)
 		b.WriteByte(')')
 		if c.foreignCascade {
-			b.WriteString(" ON DELETE CASCADE")
+			b.WriteString(renderOnDeleteCascade)
 		}
 	}
 
