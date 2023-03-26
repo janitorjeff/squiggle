@@ -23,7 +23,7 @@ var personRender = `CREATE TABLE IF NOT EXISTS CommandTTSPersonSettings (
 
 func testTable(t *testing.T, table *Table, expected string) {
 	if r := table.Render(); r != expected {
-		t.Fatalf("incorrect table output for scopes got:\n\n%s\n\nexpected:\n\n%s", r, expected)
+		t.Fatalf("incorrect table output, got:\n\n%s\n\nexpected:\n\n%s", r, expected)
 	}
 }
 
